@@ -39,6 +39,7 @@ func main() {
 	tls := flag.Bool("tls", false, "Does the loki connection use TLS?")
 	user := flag.String("user", "", "Loki username")
 	pass := flag.String("pass", "", "Loki password")
+	orgID := flag.String("org-id", "", "Adds an X-Scope-OrgID header to API requests if set")
 	queryTimeout := flag.Duration("query-timeout", 10*time.Second, "How long to wait for a query response from Loki")
 
 	interval := flag.Duration("interval", 1000*time.Millisecond, "Duration between log entries")
@@ -84,7 +85,7 @@ func main() {
 		defer c.lock.Unlock()
 
 		c.writer = writer.NewWriter(os.Stdout, sentChan, *interval, *size)
-		c.reader = reader.NewReader(os.Stderr, receivedChan, *tls, *addr, *user, *pass, *queryTimeout, *lName, *lVal, *sName, *sValue, *interval)
+		c.reader = reader.NewReader(os.Stderr, receivedChan, *tls, *addr, *user, *pass, *orgID, *queryTimeout, *lName, *lVal, *sName, *sValue, *interval)
 		c.comparator = comparator.NewComparator(os.Stderr, *wait, *maxWait, *pruneInterval, *spotCheckInterval, *spotCheckMax, *spotCheckQueryRate, *spotCheckWait, *metricTestInterval, *metricTestQueryRange, *interval, *buckets, sentChan, receivedChan, c.reader, true)
 	}
 

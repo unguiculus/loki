@@ -50,8 +50,6 @@ type Reader struct {
 	header       http.Header
 	tls          bool
 	addr         string
-	user         string
-	pass         string
 	queryTimeout time.Duration
 	sName        string
 	sValue       string
@@ -69,21 +67,14 @@ type Reader struct {
 	done         chan struct{}
 }
 
-func NewReader(writer io.Writer,
-	receivedChan chan time.Time,
-	tls bool,
-	address string,
-	user string,
-	pass string,
-	queryTimeout time.Duration,
-	labelName string,
-	labelVal string,
-	streamName string,
-	streamValue string,
-	interval time.Duration) *Reader {
+func NewReader(writer io.Writer, receivedChan chan time.Time, tls bool, address string, user string, pass string, orgID string, queryTimeout time.Duration, labelName string, labelVal string, streamName string, streamValue string, interval time.Duration) *Reader {
 	h := http.Header{}
+	h.Set("User-Agent", userAgent)
 	if user != "" {
-		h = http.Header{"Authorization": {"Basic " + base64.StdEncoding.EncodeToString([]byte(user+":"+pass))}}
+		h.Set("Authorization", "Basic " + base64.StdEncoding.EncodeToString([]byte(user+":"+pass)))
+	}
+	if orgID != "" {
+		h.Set("X-Scope-OrgID", orgID)
 	}
 
 	next := time.Now()
@@ -98,8 +89,6 @@ func NewReader(writer io.Writer,
 		header:       h,
 		tls:          tls,
 		addr:         address,
-		user:         user,
-		pass:         pass,
 		queryTimeout: queryTimeout,
 		sName:        streamName,
 		sValue:       streamValue,
@@ -173,9 +162,7 @@ func (r *Reader) QueryCountOverTime(queryRange string) (float64, error) {
 		return 0, err
 	}
 
-	req.SetBasicAuth(r.user, r.pass)
-	req.Header.Set("User-Agent", userAgent)
-
+	req.Header = r.header
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return 0, err
@@ -259,8 +246,7 @@ func (r *Reader) Query(start time.Time, end time.Time) ([]time.Time, error) {
 		return nil, err
 	}
 
-	req.SetBasicAuth(r.user, r.pass)
-	req.Header.Set("User-Agent", userAgent)
+	req.Header = r.header
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -392,7 +378,8 @@ func (r *Reader) closeAndReconnect() {
 
 		fmt.Fprintf(r.w, "Connecting to loki at %v, querying for label '%v' with value '%v'\n", u.String(), r.lName, r.lVal)
 
-		c, _, err := websocket.DefaultDialer.Dial(u.String(), r.header)
+		c, resp, err := websocket.DefaultDialer.Dial(u.String(), r.header)
+		_ = resp
 		if err != nil {
 			fmt.Fprintf(r.w, "failed to connect to %s with err %s\n", u.String(), err)
 			<-time.After(10 * time.Second)
